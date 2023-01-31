@@ -19,10 +19,16 @@
   "testPath": "tester.sh",
   "version": "{{ app.version }}",
   "defaultMaxRunTime": "00:30:00",
-  "inputs": [    {
-    "id": "input1",
+  "inputs": [    
+   {
+    "id": "receptor",
+    "value": {
+      "default": "",
+      "visible": true,
+      "required": true
+    },
     "details": {
-      "label": "An input file"
+      "label": "A receptor input file"
     },
     "semantics": {}
   }],
@@ -35,6 +41,80 @@
         "visible": false,
         "required": true,
         "order": 1000
+      }
+    },
+    {
+      "id": "center_x",
+      "value": {
+        "default": 15,
+        "type": "number",
+        "visible": true,
+        "required": true,
+        "order": 1000
+      }
+    },
+    {  
+      "id": "center_y",
+      "value": {
+        "default": 53,
+        "type": "number",
+        "visible": true,
+        "required": true,
+        "order": 1000
+      }
+    },
+    {
+      "id": "center_z",
+      "value": {
+        "default": 17,
+        "type": "number",
+        "visible": true,   
+        "required": true,
+        "order": 1000
+      }
+    },
+    {
+      "id": "size_x",
+      "value": {
+        "default": 20,    
+        "type": "number",
+        "visible": true,
+        "required": true,
+        "order": 1000
+      }
+    },
+    {
+      "id": "size_y",
+      "value": {
+        "default": 20,
+        "type": "number",
+        "visible": true,
+        "required": true,
+        "order": 1000
+      }
+    },
+    {  
+      "id": "size_z",
+      "value": {
+        "default": 20,
+        "type": "number",
+        "visible": true,
+        "required": true,
+        "order": 1000   
+      }
+    },
+    {  
+      "id": "module",
+      "value": {
+ 	"default": "vina",
+        "enumValues":[
+  	  {"vina": "vina"},
+  	  {"ad4": "ad4"}
+	],
+        "type": "enumeration",
+        "visible": true,
+        "required": true,
+        "order": 1000   
       }
     }
   ],
