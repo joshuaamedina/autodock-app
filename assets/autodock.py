@@ -41,7 +41,7 @@ else:
     flexible = True
 sidechains = ['THR315']
 docking_type = args.module
-ligand_library = '/scratch/02875/docking/test/Enamine-PC/100_sets'
+ligand_library = '/work/09252/joshuaam/ls6/ligands/Enamine-PC/Enamine-PC-Compressed/test'
 config_path = './configs/config.config'
 user_configs = {'center_x': center_x, 'center_y': center_y, \
                 'center_z': center_z, 'size_x': size_x, \
@@ -157,14 +157,9 @@ def main():
             comm.sendrecv('pre-processing finished; ask for work', dest=i)
 
         # Until all ligands have been docked, send more work to worker ranks
-        count = 0
-        while count < 1:
+        while ligands:
             source = comm.recv(source=MPI.ANY_SOURCE)
             comm.send(ligands.pop(), dest=source)
-            count+=1
-#        while ligands:
-#            source = comm.recv(source=MPI.ANY_SOURCE)
-#            comm.send(ligands.pop(), dest=source)
 
         # When all ligands have been sent, let worker ranks know they can stop
         for i in range(size):
