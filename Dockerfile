@@ -4,7 +4,7 @@ FROM tacc/tacc-ubuntu18-mvapich2.3-ib:latest
 RUN apt-get update && apt-get upgrade -y && apt-get install -y python3-pip
 RUN apt-get install wget -y
 RUN curl -O https://bootstrap.pypa.io/pip/3.6/get-pip.py && python3 get-pip.py
-RUN pip3 install mpi4py && pip3 install numpy==1.19.5
+RUN pip3 install mpi4py && pip3 install numpy==1.19.5 && pip3 install blosc
 RUN pip install -U numpy vina
 
 RUN wget -O ADFR.tar  https://ccsb.scripps.edu/adfr/download/1038/
