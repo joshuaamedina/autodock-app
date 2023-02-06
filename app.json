@@ -116,6 +116,58 @@
         "required": true,
         "order": 1000   
       }
+    },
+    {
+      "id": "docking",
+      "value": {
+        "default": "basic",
+        "enumValues":[
+          {"basic": "basic"},
+          {"flexible": "flexible"}
+        ],
+        "type": "enumeration",
+        "visible": true, 
+        "required": true,
+        "order": 1000
+      }
+    },
+    {  
+      "id": "library",
+      "value": {
+        "default": "/work/09252/joshuaam/ls6/ligands/Enamine-PC/Enamine-PC-Compressed/test",
+        "enumValues":[
+          {"/work/09252/joshuaam/ls6/ligands/Enamine-PC/Enamine-PC-Compressed/test": "test"},
+	        {"/scratch/02875/docking/test/Enamine-AC/100_sets": "Enamine-AC"},
+          {"/scratch/02875/docking/test/Enamine-HTSC/100_sets": "Enamine-HTSC"},
+          {"/scratch/02875/docking/test/Enamine-PC/100_sets": "Enamine-PC"},
+          {"/scratch/02875/docking/test/ZINC-in-trials/100_sets": "ZINC-in-trials"},
+          {"/scratch/02875/docking/test/ZINC-fragments/100_sets": "ZINC-fragments"}
+        ],
+        "type": "enumeration",
+        "visible": true,
+        "required": true,
+        "order": 1000
+      }
+    },
+    {
+      "id": "top n scores",
+      "value": {
+        "default": 5,
+        "type": "number",
+        "visible": true,
+        "required": true,
+        "order": 1000
+      }
+    },
+    {
+      "id": "flexible sidechains",
+      "value": {
+        "default": "",
+        "type": "string",
+        "visible": true,
+        "required": false,
+        "order": 1000   
+      }
     }
   ],
   "outputs": []
