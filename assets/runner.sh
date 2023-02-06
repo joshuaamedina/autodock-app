@@ -27,5 +27,4 @@ fi
 # set +x
 
 singularity pull vina.sif docker://joshuaamedina2000/python_vina:0.0.1
-MV2_ENABLE_AFFINITY=0 ibrun -np 1 singularity exec vina.sif python3 autodock.py -r ${receptor} -c "${center_x},${center_y},${center_z}" -s "${size_x},${size_y},${size_z}" -m ${module} -d basic
-#singularity exec vina.sif python3 test.py -r ${receptor} -c "${center_x},${center_y},${center_z}" -s "${size_x},${size_y},${size_z}" -m ${module} -d basic
+MV2_ENABLE_AFFINITY=0 ibrun -np 11 singularity exec vina.sif python3 autodock.py -r ${receptor} -c "${center_x},${center_y},${center_z}" -s "${size_x},${size_y},${size_z}" -m ${module} -d ${docking} -ll ${library} -n ${top n scores} -f ${flexible sidechains}
