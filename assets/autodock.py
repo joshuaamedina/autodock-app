@@ -33,7 +33,7 @@ parser.add_argument('-s','--size',type=str,required=True,
 parser.add_argument('-m','--module',type=str,required=True,
                     help='module for docking')
 parser.add_argument('-d','--docking',type=str,required=True,
-                    help='basic or flexible docking')
+                    help='rigid or flexible docking')
 parser.add_argument('-f','--sidechains',type=str,required=False,
                     help='sidechains if flexible docking')
 parser.add_argument('-n','--number',type=int,required=True,
@@ -55,11 +55,13 @@ size_z = float(box[2])
 full_receptor=args.receptor
 receptor=full_receptor.split('.')[0]
 flex_receptor=f'{receptor}_flex'
-if docking == 'basic':
+if docking == 'rigid':
     flexible = False
 elif docking == 'flexible':
     flexible = True
-    sidechains = (args.sidechains).split()
+    sidechains = (args.sidechains).split('_')
+
+subprocess.run([f'echo {sidechains} >> error.txt'],shell=True)
 docking_type = args.module
 ligand_library = args.ligand_library
 config_path = './configs/config.config'

@@ -5,12 +5,12 @@
   "executionType": "HPC",
   "deploymentPath": "{{ username }}/apps/{{ app.name }}-{{ app.version }}",
   "deploymentSystem": "tacc.work.joshuaam",
-  "helpURI": "",
-  "label": "{{ app.label }}",
+  "helpURI": "https://drugdiscovery.tacc.utexas.edu/#/faq",
+  "label": "Autodock Vina 1.2.3",
   "shortDescription": "{{ app.description }}",
-  "longDescription": "",
+  "longDescription": "This app provides a graphical interface for conducting a screen for identifying small molecules that bind to your target protein using the Autodock software. This app is intended to provide easy access to researchers wishing to perform small numbers of docking or virtual screening experiments.",
   "modules": [
-    "load tacc-singularity"
+    "load tacc-apptainer"
   ],
   "ontology": [],
   "parallelism": "SERIAL",
@@ -28,7 +28,8 @@
       "required": true
     },
     "details": {
-      "label": "A receptor input file"
+      "label": "Receptor Input File",
+      "description": "Please provide a receptor formatted in a .pdb or .pdbqt file"
     },
     "semantics": {}
   }],
@@ -46,127 +47,161 @@
     {
       "id": "center_x",
       "value": {
-        "default": 15,
         "type": "number",
         "visible": true,
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Center X-Coordinate"
       }
     },
     {  
       "id": "center_y",
       "value": {
-        "default": 53,
+        "default": 0,
         "type": "number",
         "visible": true,
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Center Y-Coordinate"
       }
     },
     {
       "id": "center_z",
       "value": {
-        "default": 17,
+        "default": 0,
         "type": "number",
         "visible": true,   
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Center Z-Coordinate"
       }
     },
     {
       "id": "size_x",
       "value": {
-        "default": 20,    
+        "default": 30,    
         "type": "number",
         "visible": true,
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Box X-Coordinate"
       }
     },
     {
       "id": "size_y",
       "value": {
-        "default": 20,
+        "default": 30,
         "type": "number",
         "visible": true,
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Box Y-Coordinate"
       }
     },
     {  
       "id": "size_z",
       "value": {
-        "default": 20,
+        "default": 30,
         "type": "number",
         "visible": true,
         "required": true,
         "order": 1000   
+      },
+      "details": {
+        "label": "Box Z-Coordinate"
       }
     },
     {  
-      "id": "module",
+      "id": "forcefield",
       "value": {
- 	"default": "vina",
+ 	      "default": "vina",
         "enumValues":[
-  	  {"vina": "vina"},
-  	  {"ad4": "ad4"}
-	],
+  	      {"vina": "Vina"},
+  	      {"ad4": "Autodock4"}
+        ],
         "type": "enumeration",
         "visible": true,
         "required": true,
         "order": 1000   
+      },
+      "details": {
+        "label": "Scoring Method"
       }
     },
     {
       "id": "docking",
       "value": {
-        "default": "basic",
+        "default": "rigid",
         "enumValues":[
-          {"basic": "basic"},
-          {"flexible": "flexible"}
+          {"rigid": "Rigid"},
+          {"flexible": "Flexible"}
         ],
         "type": "enumeration",
         "visible": true, 
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Docking"
       }
     },
     {  
       "id": "library",
       "value": {
-        "default": "/work/09252/joshuaam/ls6/ligands/Enamine-PC/Enamine-PC-Compressed/test",
+        "default": "/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test",
         "enumValues":[
-          {"/work/09252/joshuaam/ls6/ligands/Enamine-PC/Enamine-PC-Compressed/test": "test"},
+          {"/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test": "test"},
 	        {"/scratch/02875/docking/test/Enamine-AC/100_sets": "Enamine-AC"},
           {"/scratch/02875/docking/test/Enamine-HTSC/100_sets": "Enamine-HTSC"},
-          {"/scratch/02875/docking/test/Enamine-PC/100_sets": "Enamine-PC"},
-          {"/scratch/02875/docking/test/ZINC-in-trials/100_sets": "ZINC-in-trials"},
+          {"/scratch/02875/docking/test/Enamine-PC-compressed/1": "Enamine-PC"},
+          {"/scratch/02875/docking/test/ZINC-in-trials-compressed/1": "ZINC-in-trials"},
           {"/scratch/02875/docking/test/ZINC-fragments/100_sets": "ZINC-fragments"}
         ],
         "type": "enumeration",
         "visible": true,
         "required": true,
         "order": 1000
+      },      
+      "details": {
+        "label": "Library"
       }
     },
     {
-      "id": "top n scores",
+      "id": "top_n_scores",
       "value": {
-        "default": 5,
+        "default": 500,
         "type": "number",
         "visible": true,
         "required": true,
         "order": 1000
+      },
+      "details": {
+        "label": "Returned Scores",
+        "description": "Please provide the number of best docking scores to be returned"
       }
     },
     {
-      "id": "flexible sidechains",
+      "id": "flexible_sidechains",
       "value": {
         "default": "",
         "type": "string",
         "visible": true,
         "required": false,
         "order": 1000   
+      },
+      "details": {
+        "label": "Flexible Sidechains",
+        "description": "Please provide the sidechain names with a space in between each i.e. THR315 THR316 THR317"
       }
     }
   ],
