@@ -26,5 +26,13 @@ fi
 
 # set +x
 
-singularity pull vina.sif docker://joshuaamedina2000/python_vina:0.0.1
-MV2_ENABLE_AFFINITY=0 ibrun -np 11 singularity exec vina.sif python3 autodock.py -r ${receptor} -c "${center_x},${center_y},${center_z}" -s "${size_x},${size_y},${size_z}" -m ${module} -d ${docking} -ll ${library} -n ${top n scores} -f ${flexible sidechains}
+
+singularity pull vina_1.2.3.sif docker://joshuaamedina2000/autodock-vina:1.2.3
+flex=${flexible_sidechains}
+if
+     [ -z "${flexible_sidechains}" ]
+then
+     flex='Empty'
+fi
+    
+MV2_ENABLE_AFFINITY=0 ibrun -np 32 singularity exec vina_1.2.3.sif python3 autodock.py -r ${receptor} -c "${center_x},${center_y},${center_z}" -s "${size_x},${size_y},${size_z}" -m ${forcefield} -d ${docking} -ll ${library} -n ${top_n_scores} -f $flex
