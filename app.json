@@ -13,7 +13,7 @@
     "load tacc-apptainer"
   ],
   "ontology": [],
-  "parallelism": "SERIAL",
+  "parallelism": "PARALLEL",
   "tags": [],
   "templatePath": "runner.sh",
   "testPath": "tester.sh",
@@ -47,6 +47,7 @@
     {
       "id": "center_x",
       "value": {
+        "default": 16,
         "type": "number",
         "visible": true,
         "required": true,
@@ -59,7 +60,7 @@
     {  
       "id": "center_y",
       "value": {
-        "default": 0,
+        "default": 52,
         "type": "number",
         "visible": true,
         "required": true,
@@ -72,7 +73,7 @@
     {
       "id": "center_z",
       "value": {
-        "default": 0,
+        "default": 18,
         "type": "number",
         "visible": true,   
         "required": true,
@@ -161,7 +162,11 @@
         "default": "/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test",
         "enumValues":[
           {"/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test": "test"},
-	        {"/scratch/02875/docking/test/Enamine-AC/100_sets": "Enamine-AC"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/5000_set":"Enamine-5000"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/10000_set":"Enamine-10000"},
+          {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/5000_set":"Zinc-5000"},
+          {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/10000_set":"Zinc-10000"},
+	        {"/scratch/02875/docking/test/Enamine-AC-compressed": "Enamine-AC"},
           {"/scratch/02875/docking/test/Enamine-HTSC/100_sets": "Enamine-HTSC"},
           {"/scratch/02875/docking/test/Enamine-PC-compressed/1": "Enamine-PC"},
           {"/scratch/02875/docking/test/ZINC-in-trials-compressed/1": "ZINC-in-trials"},
@@ -201,7 +206,7 @@
       },
       "details": {
         "label": "Flexible Sidechains",
-        "description": "Please provide the sidechain names with a space in between each i.e. THR315 THR316 THR317"
+        "description": "Please provide the sidechain names with an underscore in between each i.e. THR315_THR316_THR317"
       }
     }
   ],
