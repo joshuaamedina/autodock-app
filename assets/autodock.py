@@ -55,7 +55,7 @@ size_z = float(box[2])
 full_receptor=args.receptor
 receptor=full_receptor.split('.')[0]
 flex_receptor=f'{receptor}_flex'
-if docking == 'basic':
+if docking == 'rigid':
     flexible = False
 elif docking == 'flexible':
     flexible = True
@@ -150,18 +150,24 @@ def prep_receptor():
     # Converts a PDB receptor to a PDBQT, if needed. If the user has specified 
     #   flexible docking, also prepares the rigid receptor and user-chosen 
     #   flexible sidechains.
-    try:
-        if exists(f'{receptor}.pdb'):
+    if exists(f'{receptor}.pdb'):
+        try:
             subprocess.run([f'prepare_receptor -r {receptor}.pdb \
                             -o {receptor}.pdbqt'], shell=True)
-        if flexible == True:
+        except:
+            subprocess.run([f"echo 'error on rank {rank}: error prepping receptor' \
+                            >> errors.txt"],shell=True)
+            comm.Abort()
+        
+    if flexible == True:
+        try:
             subprocess.run([f"pythonsh ./scripts/prepare_flexreceptor.py \
                             -g {receptor}.pdbqt -r {receptor}.pdbqt \
                             -s {'_'.join(sidechains)}"], shell=True)
-    except:
-        subprocess.run([f"echo 'error on rank {rank}: error prepping receptor' \
-                        >> errors.txt"],shell=True)
-        comm.Abort()
+        except:
+            subprocess.run([f"echo 'error on rank {rank}: error prepping receptor' \
+                            >> errors.txt"],shell=True)
+            comm.Abort()
 
 def prep_ligands():
     # Returns a list where each item is the path to a pickled and compressed 
@@ -241,15 +247,12 @@ def processing():
     count = 1
     directory = 1
     while True:
-        try:
-            comm.send(rank,dest=0) # Ask rank 0 for another set of ligands
-            ligand_set_path = comm.recv(source=0) # Wait for a response
-            if ligand_set_path == 'no more ligands':
-                comm.send('message received--proceed to post-processing',dest=0)
-                break
-        except:
-            subprocess.run([f"echo 'error on rank {rank}: communication error \
-                            with rank 0' >> errors.txt"],shell=True)
+        comm.send(rank,dest=0) # Ask rank 0 for another set of ligands
+        ligand_set_path = comm.recv(source=0) # Wait for a response
+        if ligand_set_path == 'no more ligands':
+            comm.send('message received--proceed to post-processing',dest=0)
+            break
+
         try:
             ligands = unpickle_and_decompress(ligand_set_path)
         except:
