@@ -7,6 +7,7 @@ import blosc # For decompressing compressed ligand files
 from os.path import exists
 from os.path import basename # Used in the sorting function
 import argparse # To accept user inputs as command line arguments
+import time
 
 """
 Setup base MPI declarations
@@ -62,6 +63,9 @@ elif docking == 'flexible':
     sidechains = (args.sidechains).split('_')
 docking_type = args.module
 ligand_library = args.ligand_library
+library_short = ligand_library.split('/')[6]
+tasks = int(os.environ['SLURM_NTASKS'])
+nodes = int(os.environ['SLURM_NNODES'])
 config_path = './configs/config.config'
 user_configs = {'center_x': center_x,
                 'center_y': center_y,
@@ -72,25 +76,45 @@ user_configs = {'center_x': center_x,
 
 
 number_of_outputs = args.number if args.number <= 1000 else 1000
-
 # Internal variables
+# tasks should be nodes * 128 / cpus
+
 cpus = 4
-verbosity = 0
-poses = 1
+verbosity = 0 # Prints vina docking progress to stdout if set to 1 (normal) or 2 (verbose)
+poses = 1 # If set to 1, only saves the best pose/score to the output ligand .pdbqt file
 exhaustiveness = 8
 
 def check_user_configs():
-    # Check that user-inputted flexible sidechains are found within the .pdbqt file
+    expected_nodes = 0
+    expected_tasks = 0
+
+    '''if library_short in ['Enamine-PC', 'Enamine-AC', 'ZINC-in-trials']:
+        expected_nodes = 1
+        expected_tasks = 32
+    elif library_short == 'Enamine-HTSC':
+        expected_nodes = 10
+        expected_tasks = 320
+    elif library_short == 'ZINC-fragments':
+        expected_nodes = 5
+        expected_tasks = 160
+    '''
+
+    #subprocess.run([f"echo '{expected_nodes} {library_short}' >> error.txt"], shell=True)
+
+    # User inputted box size must be within bounds specified below
     for size in [size_x, size_y, size_z]:
         if not (size <= 30 and size >= 1):
            subprocess.run(["echo 'box size is outside the bounds (1-30)' \
                            >> error.txt"], shell=True)
            comm.Abort()
+    # User must input a file ending in .pdb or .pdbqt
     if not (full_receptor.endswith('.pdb') or full_receptor.endswith('.pdbqt')):
         subprocess.run(["echo 'Please provide a .pdb or .pdbqt file' \
                         >> error.txt"], shell=True)
         comm.Abort()
           
+    # User inputted grid center must be within the receptor's min/max bounds
+    # User inputted sidechains must be found within the .pdbqt receptor file
     all_sidechains = []
     xbounds = []
     ybounds = []
@@ -108,7 +132,7 @@ def check_user_configs():
         for sidechain in sidechains:
             if not sidechain in all_sidechains:
                 subprocess.run(["echo 'Please provide valid flexible sidechain \
-                                names, separated by spaces (e.g. THR315 GLU268)' \
+                                names, separated by underscores (e.g. THR315_GLU268)' \
                                 >> error.txt"], shell=True)
                 comm.Abort()
                   
@@ -124,6 +148,18 @@ def check_user_configs():
         subprocess.run(["echo 'Center z coordinate is not within bounds' \
                         >> error.txt"], shell=True)
         comm.Abort()
+    '''
+    # User inputted #Nodes and #Tasks must match our internal values (specified above) exactly
+    if not (tasks == expected_tasks) or not (nodes == expected_nodes):
+        subprocess.run([f"echo 'Incorrect values for #Nodes and/or #ProcessorsPerNode.\n \
+                        Please review input guidelines before submitting a job.\n \
+                        Current #Nodes={nodes}\n \
+                        Current#Tasks={tasks}\n \
+                        Expected #Nodes for {library_short}={expected_nodes}\n \
+                        Expected #Tasks for {library_short}={expected_tasks}' \
+                        >> error.txt"], shell=True)
+        comm.Abort()
+    '''
 
 
 def prep_config():
@@ -152,22 +188,21 @@ def prep_receptor():
     #   flexible sidechains.
     if exists(f'{receptor}.pdb'):
         try:
-            subprocess.run([f'prepare_receptor -r {receptor}.pdb \
-                            -o {receptor}.pdbqt'], shell=True)
+            subprocess.run([f'prepare_receptor -r {receptor}.pdb'], shell=True)
         except:
             subprocess.run([f"echo 'error on rank {rank}: error prepping receptor' \
-                            >> errors.txt"],shell=True)
+                            >> errors.txt"], shell=True)
             comm.Abort()
-        
     if flexible == True:
         try:
             subprocess.run([f"pythonsh ./scripts/prepare_flexreceptor.py \
-                            -g {receptor}.pdbqt -r {receptor}.pdbqt \
-                            -s {'_'.join(sidechains)}"], shell=True)
+                -g {receptor}.pdbqt -r {receptor}.pdbqt \
+                -s {'_'.join(sidechains)}"], shell=True)
         except:
-            subprocess.run([f"echo 'error on rank {rank}: error prepping receptor' \
-                            >> errors.txt"],shell=True)
+            subprocess.run([f"echo 'error on rank {rank}: error prepping flex \
+                            receptor >> errors.txt"], shell=True)
             comm.Abort()
+    
 
 def prep_ligands():
     # Returns a list where each item is the path to a pickled and compressed 
@@ -252,19 +287,20 @@ def processing():
         if ligand_set_path == 'no more ligands':
             comm.send('message received--proceed to post-processing',dest=0)
             break
-
+        subprocess.run([f"echo 'error on rank {rank}: communication error \
+                        with rank 0' >> errors.txt"], shell=True)
         try:
             ligands = unpickle_and_decompress(ligand_set_path)
-        except:
-            subprocess.run([f"echo 'error on rank {rank}: could not \
+        except Exception as e:
+            subprocess.run([f"echo 'error on rank {rank}: {e} **** could not \
                             unpickle/decompress {ligand_set_path}' \
-                            >> errors.txt"],shell=True)
+                            >> errors.txt"], shell=True)
         try:
             run_docking(ligands, v, directory)
         except:
             subprocess.run([f"echo 'error on rank {rank}: docking error with \
                             ligand set {ligand_set_path}, ligands {ligands}' \
-                            >> errors.txt"],shell=True)
+                            >> errors.txt"], shell=True)
         count += 1
         if count == 100:
             count = 1
@@ -312,7 +348,7 @@ def isolate_output():
                                     ./output/results/ligands'], \
                                     shell=True)
     
-    with open('./output/results/combined_docked_ligands', 'w+') as combined:
+    with open('./output/results/combined_docked_ligands.pdbqt', 'w+') as combined:
         for dirpath, dirnames, filenames in os.walk('./output/results/ligands'):
             for filename in filenames:
                 lines = open(f'{dirpath}/{filename}', 'r').read()
@@ -333,6 +369,7 @@ def reset():
 
 def main():
     if rank == 0:
+        start_time = time.time()
         # Pre-Processing
         pre_processing()
         ligands = prep_ligands()
@@ -354,6 +391,12 @@ def main():
         sort()
         isolate_output()
         reset()
+        end_time = time.time()
+        total_time = end_time - start_time
+        subprocess.run([f"echo {total_time} > runtime.txt"], shell=True)
+        subprocess.run([f"echo ' Nodes: {os.environ['SLURM_NNODES']}' >> runtime.txt"], 
+shell=True)
+        subprocess.run([f"echo ' Library: {library_short}' >> runtime.txt"], shell=True)
 
     else: # All ranks besides rank 0
         comm.recv(source=0) # Wait for rank 0 to finish pre-processing

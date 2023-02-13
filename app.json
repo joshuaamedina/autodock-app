@@ -6,7 +6,7 @@
   "deploymentPath": "{{ username }}/apps/{{ app.name }}-{{ app.version }}",
   "deploymentSystem": "tacc.work.joshuaam",
   "helpURI": "https://drugdiscovery.tacc.utexas.edu/#/faq",
-  "label": "Autodock Vina 1.2.3",
+  "label": "Autodock",
   "shortDescription": "{{ app.description }}",
   "longDescription": "This app provides a graphical interface for conducting a screen for identifying small molecules that bind to your target protein using the Autodock software. This app is intended to provide easy access to researchers wishing to perform small numbers of docking or virtual screening experiments.",
   "modules": [
@@ -18,7 +18,7 @@
   "templatePath": "runner.sh",
   "testPath": "tester.sh",
   "version": "{{ app.version }}",
-  "defaultMaxRunTime": "00:30:00",
+  "defaultMaxRunTime": "02:00:00",
   "inputs": [    
    {
     "id": "receptor",
@@ -162,15 +162,21 @@
         "default": "/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test",
         "enumValues":[
           {"/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test": "test"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/5000_set":"Enamine-5000"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/10000_set":"Enamine-10000"},
-          {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/5000_set":"Zinc-5000"},
-          {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/10000_set":"Zinc-10000"},
-	        {"/scratch/02875/docking/test/Enamine-AC-compressed": "Enamine-AC"},
+	  {"/scratch/02875/docking/test/Enamine-AC/100_sets": "Enamine-AC"},
           {"/scratch/02875/docking/test/Enamine-HTSC/100_sets": "Enamine-HTSC"},
           {"/scratch/02875/docking/test/Enamine-PC-compressed/1": "Enamine-PC"},
           {"/scratch/02875/docking/test/ZINC-in-trials-compressed/1": "ZINC-in-trials"},
-          {"/scratch/02875/docking/test/ZINC-fragments/100_sets": "ZINC-fragments"}
+          {"/scratch/02875/docking/test/ZINC-fragments/100_sets": "ZINC-fragments"},
+	  {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/5000_set": "ZINC-in-trials 5k"},
+          {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/10000_set": "ZINC-in-trials 10k"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/5000_set": "PC 5k"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/10000_set": "PC 10k"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-AC/5000_set": "AC 5k"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-AC/10000_set": "AC 10k"},
+          {"/scratch/02875/docking/test/benchmarks/ZINC-fragments/5000_set": "ZINC-fragments 5k"},
+          {"/scratch/02875/docking/test/benchmarks/ZINC-fragments/10000_set": "ZINC-fragments 10k"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-HTSC/5000_set": "HTSC 5k"},
+          {"/scratch/02875/docking/test/benchmarks/Enamine-HTSC/10000_set": "HTSC 10k"}
         ],
         "type": "enumeration",
         "visible": true,
@@ -198,7 +204,7 @@
     {
       "id": "flexible_sidechains",
       "value": {
-        "default": "",
+        "default": "THR315",
         "type": "string",
         "visible": true,
         "required": false,
@@ -206,7 +212,7 @@
       },
       "details": {
         "label": "Flexible Sidechains",
-        "description": "Please provide the sidechain names with an underscore in between each i.e. THR315_THR316_THR317"
+        "description": "Please provide the sidechain names with a space in between each i.e. THR315 THR316 THR317"
       }
     }
   ],
