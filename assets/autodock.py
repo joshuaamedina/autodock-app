@@ -78,29 +78,21 @@ user_configs = {'center_x': center_x,
 number_of_outputs = args.number if args.number <= 1000 else 1000
 # Internal variables
 # tasks should be nodes * 128 / cpus
-
+if library_short in ['Enamine-PC', 'Enamine-AC', 'ZINC-in-trials']:
+    expected_nodes = 1
+    expected_tasks = 32
+elif library_short == 'Enamine-HTSC':
+    expected_nodes = 1
+    expected_tasks = 32
+elif library_short == 'ZINC-fragments':
+    expected_nodes = 1
+    expected_tasks = 32
 cpus = 4
 verbosity = 0 # Prints vina docking progress to stdout if set to 1 (normal) or 2 (verbose)
 poses = 1 # If set to 1, only saves the best pose/score to the output ligand .pdbqt file
 exhaustiveness = 8
 
 def check_user_configs():
-    expected_nodes = 0
-    expected_tasks = 0
-
-    '''if library_short in ['Enamine-PC', 'Enamine-AC', 'ZINC-in-trials']:
-        expected_nodes = 1
-        expected_tasks = 32
-    elif library_short == 'Enamine-HTSC':
-        expected_nodes = 10
-        expected_tasks = 320
-    elif library_short == 'ZINC-fragments':
-        expected_nodes = 5
-        expected_tasks = 160
-    '''
-
-    #subprocess.run([f"echo '{expected_nodes} {library_short}' >> error.txt"], shell=True)
-
     # User inputted box size must be within bounds specified below
     for size in [size_x, size_y, size_z]:
         if not (size <= 30 and size >= 1):
@@ -148,7 +140,7 @@ def check_user_configs():
         subprocess.run(["echo 'Center z coordinate is not within bounds' \
                         >> error.txt"], shell=True)
         comm.Abort()
-    '''
+    
     # User inputted #Nodes and #Tasks must match our internal values (specified above) exactly
     if not (tasks == expected_tasks) or not (nodes == expected_nodes):
         subprocess.run([f"echo 'Incorrect values for #Nodes and/or #ProcessorsPerNode.\n \
@@ -159,7 +151,7 @@ def check_user_configs():
                         Expected #Tasks for {library_short}={expected_tasks}' \
                         >> error.txt"], shell=True)
         comm.Abort()
-    '''
+
 
 
 def prep_config():
@@ -291,8 +283,8 @@ def processing():
                         with rank 0' >> errors.txt"], shell=True)
         try:
             ligands = unpickle_and_decompress(ligand_set_path)
-        except Exception as e:
-            subprocess.run([f"echo 'error on rank {rank}: {e} **** could not \
+        except:
+            subprocess.run([f"echo 'error on rank {rank}: could not \
                             unpickle/decompress {ligand_set_path}' \
                             >> errors.txt"], shell=True)
         try:
@@ -394,8 +386,7 @@ def main():
         end_time = time.time()
         total_time = end_time - start_time
         subprocess.run([f"echo {total_time} > runtime.txt"], shell=True)
-        subprocess.run([f"echo ' Nodes: {os.environ['SLURM_NNODES']}' >> runtime.txt"], 
-shell=True)
+        subprocess.run([f"echo ' Nodes: {os.environ['SLURM_NNODES']}' >> runtime.txt"], shell=True)
         subprocess.run([f"echo ' Library: {library_short}' >> runtime.txt"], shell=True)
 
     else: # All ranks besides rank 0
