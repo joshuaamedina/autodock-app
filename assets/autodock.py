@@ -1,7 +1,7 @@
 from vina import Vina
 from mpi4py import MPI
 import subprocess
-import pickle # For unpickling ligand files
+import pickle # For unpickling pickled ligand files
 import os
 import blosc # For decompressing compressed ligand files
 from os.path import exists
@@ -10,6 +10,12 @@ import argparse # To accept user inputs as command line arguments
 import time
 import logging
 import shutil
+
+# Initialize logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(message)s',
+                    filename='autodock.log',
+                    filemode='w')
 
 """
 Setup base MPI declarations
@@ -21,15 +27,9 @@ more work. It sends work for as long as there are ligand files left. Then rank
 0 waits to hear from all ranks that they have finished processing, then 
 proceeds to do the post-processing work. 
 """
-
-logging.basicConfig(level=logging.DEBUG,
-format='%(asctime)s %(levelname)s %(message)s',
-      filename='autodock.log',
-      filemode='w')
-
-comm = MPI.COMM_WORLD
-size = comm.Get_size()
-rank = comm.Get_rank()
+COMM = MPI.COMM_WORLD
+SIZE = COMM.Get_size()
+RANK = COMM.Get_rank()
 
 # Assign user inputs
 parser = argparse.ArgumentParser(description ='vina commands')
@@ -40,7 +40,7 @@ parser.add_argument('-c','--center',type=str,required=True,
 parser.add_argument('-s','--size',type=str,required=True,
                     help='box size')
 parser.add_argument('-m','--module',type=str,required=True,
-                    help='module for docking')
+                    help='vina or ad4 module')
 parser.add_argument('-d','--docking',type=str,required=True,
                     help='basic or flexible docking')
 parser.add_argument('-f','--sidechains',type=str,required=False,
@@ -49,68 +49,103 @@ parser.add_argument('-n','--number',type=int,required=True,
                     help='top n results to return')
 parser.add_argument('-ll','--ligand_library',type=str,required=True,
                     help='ligand library')
-
 args = parser.parse_args()
-docking = args.docking
-center = (args.center).split(",")
-center_x = float(center[0])
-center_y = float(center[1])
-center_z = float(center[2])
-box = (args.size).split(",")
-size_x = float(box[0])
-size_y = float(box[1])
-size_z = float(box[2])
 
-full_receptor=args.receptor
-receptor=full_receptor.split('.')[0]
-flex_receptor=f'{receptor}_flex'
-if docking == 'rigid':
-    flexible = False
-elif docking == 'flexible':
-    flexible = True
-    sidechains = (args.sidechains).split('_')
-docking_type = args.module
-ligand_library = args.ligand_library
-library_short = ligand_library.split('/')[6]
-tasks = int(os.environ['SLURM_NTASKS'])
-nodes = int(os.environ['SLURM_NNODES'])
-config_path = './configs/config.config'
-user_configs = {'center_x': center_x,
-                'center_y': center_y,
-                'center_z': center_z,
-                'size_x': size_x,
-                'size_y': size_y,
-                'size_z': size_z}
+# Define global constants
+# Assign user inputs to grid center x-y-z and box size boundaries x-y-z
+CENTER_X = float((args.center).split(",")[0])
+CENTER_Y = float((args.center).split(",")[1])
+CENTER_Z = float((args.center).split(",")[2])
+SIZE_X = float((args.size).split(",")[0])
+SIZE_Y = float((args.size).split(",")[1])
+SIZE_Z = float((args.size).split(",")[2])
+USER_CONFIGS = {'center_x': CENTER_X,
+                'center_y': CENTER_Y,
+                'center_z': CENTER_Z,
+                'size_x': SIZE_X,
+                'size_y': SIZE_Y,
+                'size_z': SIZE_Z}
 
+FULL_RECEPTOR=args.receptor
+RECEPTOR=FULL_RECEPTOR.split('.')[0]
+FLEX_RECEPTOR=f'{RECEPTOR}_flex'
+DOCKING = args.docking
+if DOCKING == 'rigid':
+    FLEXIBLE = False
+elif DOCKING == 'flexible':
+    FLEXIBLE = True
+SIDECHAINS = (args.sidechains).split('_')
+LIBRARY_SHORT = args.ligand_library.split('/')[6]
+NUMBER_OF_OUTPUTS = args.number if args.number <= 1000 else 1000
 
-number_of_outputs = args.number if args.number <= 1000 else 1000
-# Internal variables
+# Internal constants
 # tasks should be nodes * 128 / cpus
-if library_short in ['Enamine-PC', 'Enamine-AC', 'ZINC-in-trials']:
-    expected_nodes = 1
-    expected_tasks = 32
-elif library_short == 'Enamine-HTSC':
-    expected_nodes = 1
-    expected_tasks = 32
-elif library_short == 'ZINC-fragments':
-    expected_nodes = 1
-    expected_tasks = 32
-cpus = 4
-verbosity = 0 # Prints vina docking progress to stdout if set to 1 (normal) or 2 (verbose)
-poses = 1 # If set to 1, only saves the best pose/score to the output ligand .pdbqt file
-exhaustiveness = 8
+TASKS = int(os.environ['SLURM_NTASKS']) # What the user chose on the web portal
+NODES = int(os.environ['SLURM_NNODES']) # What the user chose on the web portal
+if LIBRARY_SHORT in ['test', 'Enamine-PC', 'ZINC-fragments', 'ZINC-in-trials']:
+    EXPECTED_NODES = 1
+    EXPECTED_TASKS = 32
+elif LIBRARY_SHORT == 'Enamine-HTSC':
+    EXPECTED_NODES = 1
+    EXPECTED_TASKS = 32
+elif LIBRARY_SHORT == 'Enamine-AC':
+    EXPECTED_NODES = 1
+    EXPECTED_TASKS = 32
+CPUS = 4
+VERBOSITY = 0 # Prints vina docking progress to stdout if set to 1 (normal) or 2 (verbose)
+POSES = 1 # If set to 1, only saves the best pose/score to the output ligand .pdbqt file
+EXHAUSTIVENESS = 8
+MAX_SIDECHAINS = 6
+
+def main():
+    if RANK == 0:
+        start_time = time.time()
+        # Pre-Processing
+        pre_processing()
+        ligands = prep_ligands()
+        # Let other ranks know pre-processing is finished; they can now ask for work
+        for i in range(1,SIZE):
+            COMM.sendrecv('pre-processing finished; ask for work', dest=i)
+
+        # Until all ligands have been docked, send more work to worker ranks
+        while ligands:
+            source = COMM.recv(source=MPI.ANY_SOURCE)
+            COMM.send(ligands.pop(), dest=source)
+
+        # When all ligands have been sent, let worker ranks know they can stop
+        for i in range(1,SIZE):
+            COMM.send('no more ligands', dest=i)
+            COMM.recv(source=i)
+
+        # Post-Processing
+        sort()
+        isolate_output()
+        reset()
+        end_time = time.time()
+        total_time = end_time - start_time
+
+        logging.info(f"Script runtime = {total_time}.")
+        logging.info(f"Nodes: {NODES}.")
+        logging.info(f"Tasks: {TASKS}.")
+        logging.info(f"Library: {LIBRARY_SHORT}.")
+
+    else: # All ranks besides rank 0
+        COMM.recv(source=0) # Wait for rank 0 to finish pre-processing
+        COMM.send(RANK, dest=0)
+        processing()    
+# End def main()
+
 
 def check_user_configs():
     # User inputted box size must be within bounds specified below
-    for size in [size_x, size_y, size_z]:
+    for size in [SIZE_X, SIZE_Y, SIZE_Z]:
         if not (size <= 30 and size >= 1):
-            logging.error("box size is outside the bounds (1-30)")
-            comm.Abort()
-
+            logging.error("box size is outside the bounds (1-30).")
+            COMM.Abort()
     # User must input a file ending in .pdb or .pdbqt
-    if not (full_receptor.endswith('.pdb') or full_receptor.endswith('.pdbqt')):
-        logging.error("Please provide a .pdb or .pdbqt file")
-        comm.Abort()
+    if not (FULL_RECEPTOR.endswith('.pdb') or FULL_RECEPTOR.endswith('.pdbqt')):
+        logging.error("Please provide a .pdb or .pdbqt file.")
+        COMM.Abort()
           
     # User inputted grid center must be within the receptor's min/max bounds
     # User inputted sidechains must be found within the .pdbqt receptor file
@@ -118,92 +153,94 @@ def check_user_configs():
     xbounds = []
     ybounds = []
     zbounds = []
-    with open(f'{receptor}.pdbqt', 'r') as r:
+    with open(f'{RECEPTOR}.pdbqt', 'r') as r:
         line = r.readline()
         while line:
             line = r.readline()
-            if line.startswith('ATOM'):
+            if line.startswith('ATOM') or line.startswith('HETATM'):
                 xbounds.append(float(line.split()[6]))
                 ybounds.append(float(line.split()[7]))
                 zbounds.append(float(line.split()[8]))
                 all_sidechains.append(line.split()[3] + line.split()[5])
-    if flexible == True:
-        for sidechain in sidechains:
+    if FLEXIBLE == True:
+        for sidechain in SIDECHAINS:
             if not sidechain in all_sidechains:
                 logging.error("Please provide valid flexible sidechain \
-                                names, separated by underscores (e.g. THR315_GLU268)")
-                comm.Abort()
+                              names, separated by underscores (e.g. THR315_GLU268).")
+                COMM.Abort()
                   
-    if not (min(xbounds)) <= center_x <= (max(xbounds)):
-        logging.error("Center x coordinate is not within bounds")
-        comm.Abort()
-    if not (min(ybounds)) <= center_y <= (max(ybounds)):
-        logging.error("Center y coordinate is not within bounds")
-        comm.Abort()
-    if not (min(zbounds)) <= center_z <= (max(zbounds)):
-        logging.error("Center z coordinate is not within bounds")
-        comm.Abort()
+    if not (min(xbounds)) <= CENTER_X <= (max(xbounds)):
+        logging.error("Center x coordinate is not within bounds.")
+        COMM.Abort()
+    if not (min(ybounds)) <= CENTER_Y <= (max(ybounds)):
+        logging.error("Center y coordinate is not within bounds.")
+        COMM.Abort()
+    if not (min(zbounds)) <= CENTER_Z <= (max(zbounds)):
+        logging.error("Center z coordinate is not within bounds.")
+        COMM.Abort()
+    
+    # Maximum of 6 sidechains
+    if len(SIDECHAINS) > MAX_SIDECHAINS:
+        logging.error("Too many sidechains specified (max: 6).")
+        COMM.Abort()
     
     # User inputted #Nodes and #Tasks must match our internal values (specified above) exactly
-    if not (tasks == expected_tasks) or not (nodes == expected_nodes):
+    if not (TASKS == EXPECTED_TASKS) or not (NODES == EXPECTED_NODES):
         logging.error(f'Incorrect values for #Nodes and/or #ProcessorsPerNode.\n \
                         Please review input guidelines before submitting a job.\n \
-                        Current #Nodes={nodes}\n \
-                        Current#Tasks={tasks}\n \
-                        Expected #Nodes for {library_short}={expected_nodes}\n \
-                        Expected #Tasks for {library_short}={expected_tasks}')
-        comm.Abort()
-
+                        Current #Nodes={NODES}.\n \
+                        Current#Tasks={TASKS}.\n \
+                        Expected #Nodes for {LIBRARY_SHORT}={EXPECTED_NODES}.\n \
+                        Expected #Tasks for {LIBRARY_SHORT}={EXPECTED_TASKS}.')
+        COMM.Abort()
 
 
 def prep_config():
     # Write user inputted configurations (grid center and box size) to a 
     #   config file for AutoDock Vina to use
-    with open(config_path, 'w+') as f:
-        for config, value in user_configs.items():
+    with open('./configs/config.config', 'w+') as f:
+        for config, value in USER_CONFIGS.items():
             f.write(f'{config} = {value}\n')
-    f.close()
 
 
 def prep_maps():
     # Generate affinity maps using write-gpf.py and AFDRSuite's autogrid4. 
     #   Generates maps for all possible ligand atom types for a given receptor
-    if docking_type == 'ad4':
-        if exists(f'{receptor}.gpf'):
-            os.remove(f'{receptor}.gpf')
-            #subprocess.run([f"rm {receptor}.gpf"], shell=True)
-        subprocess.run([f"python3 ./scripts/write-gpf.py --box {config_path} \
-                        {receptor}.pdbqt"], shell=True)
-        subprocess.run([f"autogrid4 -p {receptor}.gpf"], shell=True)
+    if args.module == 'ad4':
+        if exists(f'{RECEPTOR}.gpf'):
+            os.remove(f'{RECEPTOR}.gpf')
+        subprocess.run([f"python3 ./scripts/write-gpf.py --box {'./configs/config.config'} \
+                        {RECEPTOR}.pdbqt"], shell=True)
+        subprocess.run([f"autogrid4 -p {RECEPTOR}.gpf"], shell=True)
 
 
 def prep_receptor():
     # Converts a PDB receptor to a PDBQT, if needed. If the user has specified 
     #   flexible docking, also prepares the rigid receptor and user-chosen 
     #   flexible sidechains.
-    if exists(f'{receptor}.pdb'):
+    if FULL_RECEPTOR.endswith('.pdb'):
         try:
-            subprocess.run([f'prepare_receptor -r {receptor}.pdb'], shell=True)
+            subprocess.run([f'prepare_receptor -r {RECEPTOR}.pdb'], shell=True)
         except Exception as e:
-            logging.error(f"error on rank {rank}: error prepping receptor")
+            logging.error(f"error on rank {RANK}: error prepping receptor")
             logging.debug(e)
-            comm.Abort()
-    if flexible == True:
+            COMM.Abort()
+    if FLEXIBLE == True:
         try:
             subprocess.run([f"pythonsh ./scripts/prepare_flexreceptor.py \
-                -g {receptor}.pdbqt -r {receptor}.pdbqt \
-                -s {'_'.join(sidechains)}"], shell=True)
+                -g {RECEPTOR}.pdbqt -r {RECEPTOR}.pdbqt \
+                -s {'_'.join(SIDECHAINS)}"], shell=True)
         except Exception as e:
-            logging.error(f"error on rank {rank}: error prepping flex receptor")
+            logging.error(f"error on rank {RANK}: error prepping flex receptor")
             logging.debug(e)
-            comm.Abort()
+            COMM.Abort()
     
 
 def prep_ligands():
     # Returns a list where each item is the path to a pickled and compressed 
     #   text file containing multiple ligand strings
     ligand_paths = []
-    for dirpath, dirnames, filenames in os.walk(ligand_library):
+    for dirpath, _, filenames in os.walk(args.ligand_library):
         for filename in filenames:
             ligand_paths.append(f'{dirpath}/{filename}')
     return ligand_paths
@@ -213,19 +250,19 @@ def run_docking(ligands, v, directory):
     # Runs AutoDock on each ligand in the given set; outputs a .pdbqt file 
     #   showing the pose and all scores; appends the ligand name (filename) 
     #   and it's best pose/score to a temporary results file
-    output_directory = f'./output/pdbqt/{rank}{directory}'
+    output_directory = f'./output/pdbqt/{RANK}{directory}'
     if not exists(output_directory):
         os.makedirs(output_directory)
-    for index, filename in enumerate(ligands):
+    for _, filename in enumerate(ligands):
         ligand = ligands[filename]
         v.set_ligand_from_string(ligand)
-        v.dock(exhaustiveness=exhaustiveness)
+        v.dock(exhaustiveness=EXHAUSTIVENESS)
         v.write_poses(f'{output_directory}/output_{filename}', \
-                      n_poses=poses, overwrite=True)
+                      n_poses=POSES, overwrite=True)
         subprocess.run([f"grep -i -m 1 'REMARK VINA RESULT:' \
                         {output_directory}/output_{filename} \
-                        | awk '{{print $4}}' >> results_{rank}.txt; echo {filename} \
-                        >> results_{rank}.txt"], shell=True)
+                        | awk '{{print $4}}' >> results_{RANK}.txt; echo {filename} \
+                        >> results_{RANK}.txt"], shell=True)
 
 
 def unpickle_and_decompress(path_to_file):
@@ -241,11 +278,9 @@ def unpickle_and_decompress(path_to_file):
 
 def pre_processing():
     # Helper function to reduce clutter in main()
-    # subprocess.run(['mkdir -p configs output/pdbqt output/results/ligands'], shell=True)
     os.makedirs('configs')
     os.makedirs('output/pdbqt')
     os.makedirs('output/results/ligands')
-
     prep_config()
     prep_receptor()
     prep_maps()
@@ -260,51 +295,44 @@ def processing():
     #   setting ibrun -np to 32 and, below, setting CPU=4 granted the fastest 
     #   docking. Verbosity set to 0 to increase speeds, as stdout cannot be 
     #   captured from Vina's Python module.
-    if docking_type == 'vina':
-        v = Vina(sf_name='vina', cpu=cpus, verbosity=verbosity)
-        if flexible == True:
-            v.set_receptor(f'{receptor}.pdbqt', f'{flex_receptor}.pdbqt')
+    if args.module == 'vina':
+        v = Vina(sf_name='vina', cpu=CPUS, verbosity=VERBOSITY)
+        if FLEXIBLE == True:
+            v.set_receptor(f'{RECEPTOR}.pdbqt', f'{FLEX_RECEPTOR}.pdbqt')
         else:
-            v.set_receptor(f'{receptor}.pdbqt')
-        uc = user_configs
-        v.compute_vina_maps(center=[float(uc['center_x']),
-                                    float(uc['center_y']),
-                                    float(uc['center_z'])],
-                            box_size=[float(uc['size_x']),
-                                      float(uc['size_y']),
-                                      float(uc['size_z'])])
-    elif docking_type == 'ad4':
-        v = Vina(sf_name='ad4', cpu=cpus, verbosity=verbosity)
-        v.load_maps(map_prefix_filename = receptor)
+            v.set_receptor(f'{RECEPTOR}.pdbqt')
+        v.compute_vina_maps(center=[CENTER_X, CENTER_Y, CENTER_Z],
+                            box_size=[SIZE_X, SIZE_Y, SIZE_Z])
+    elif args.module == 'ad4':
+        v = Vina(sf_name='ad4', cpu=CPUS, verbosity=VERBOSITY)
+        v.load_maps(map_prefix_filename = RECEPTOR)
         
     # Ask rank 0 for ligands and dock until rank 0 says done
     count = 1
     directory = 1
     while True:
-        comm.send(rank,dest=0) # Ask rank 0 for another set of ligands
-        ligand_set_path = comm.recv(source=0) # Wait for a response
+        COMM.send(RANK,dest=0) # Ask rank 0 for another set of ligands
+        ligand_set_path = COMM.recv(source=0) # Wait for a response
         if ligand_set_path == 'no more ligands':
-            comm.send('message received--proceed to post-processing',dest=0)
+            COMM.send('message received--proceed to post-processing',dest=0)
             break
-
         try:
             ligands = unpickle_and_decompress(ligand_set_path)
         except Exception as e:
-            logging.error(f'error on rank {rank}: could not \
-                            unpickle/decompress {ligand_set_path}')
+            logging.error(f'Error on rank {RANK}: could not \
+                            unpickle/decompress {ligand_set_path}.')
             logging.debug(e)
         try:
             run_docking(ligands, v, directory)
         except Exception as e:
-            logging.error(f'error on rank {rank}: docking error with \
-                            ligand set {ligand_set_path}, ligands {ligands}')
+            logging.error(f'Error on rank {RANK}: docking error with \
+                            ligand set {ligand_set_path}, ligands {ligands}.')
             logging.debug(e)
 
         count += 1
         if count == 100:
             count = 1
             directory += 1
-
 
 
 def sort():
@@ -327,7 +355,7 @@ def sort():
             line = data.readline()
 
     with open(OUTPUTFILE, 'w') as data:
-        data.writelines(sorted(result[:number_of_outputs], \
+        data.writelines(sorted(result[:NUMBER_OF_OUTPUTS], \
                         key=lambda x: float(x.split()[1])))
     
 
@@ -336,77 +364,37 @@ def isolate_output():
     top_ligand_filenames = []
     
     with open('./output/results/sorted_scores.txt', 'r') as results:
-        for index, line in enumerate(results):
+        for _, line in enumerate(results):
             top_ligand_filenames.append(line.split()[0])
 
-    for dirpath, dirnames, filenames in os.walk('./output/pdbqt'):
+    for dirpath, _, filenames in os.walk('./output/pdbqt'):
         for top_filename in top_ligand_filenames:
             for filename in filenames:
                 if filename == f'output_{top_filename}':
-                    subprocess.run([f'mv {dirpath}/{filename} \
-                                    ./output/results/ligands'], \
-                                    shell=True)
+                    shutil.move(f'{dirpath}/{filename}', './output/results/ligands')
     
-    with open('./output/results/combined_docked_ligands.pdbqt', 'w+') as combined:
-        for dirpath, dirnames, filenames in os.walk('./output/results/ligands'):
-            for filename in filenames:
-                lines = open(f'{dirpath}/{filename}', 'r').read()
-                combined.write(str(lines))
+    combined = open('./output/results/combined_docked_ligands.pdbqt', 'w+')
+    while top_ligand_filenames:
+        with open(f'./output/results/ligands/output_{top_ligand_filenames.pop(0)}') as f:
+            lines = f.read()
+            combined.write(lines)
+    combined.close()
     
-    subprocess.run([f'tar -czf results.tar.gz ./output/results'],
-                   shell=True)
+    subprocess.run([f'tar -czf results.tar.gz ./output/results'], shell=True)
 
 
 def reset():
     # Reset directory by removing all created files from this job
-    for dirpath, dirnames, filenames in os.walk('.'):
+    for dirpath, _, filenames in os.walk('.'):
         for filename in filenames:
-            if filename.endswith(('.map', '.txt', '.gpf', '.fld', '.xyz')): 
-                os.remove(f'{dirpath}/{filename}')
-                #subprocess.run([f'rm {dirpath}/{filename}'], shell=True)
+            if filename.endswith(('.map', '.txt', '.gpf', '.fld', '.xyz')):
+                os.remove(f'{dirpath}/{filename}') 
     shutil.rmtree('./output')
     shutil.rmtree('./configs')
-#    subprocess.run(['rm -r ./output/ ./configs'], shell=True)
-
-
-def main():
-    if rank == 0:
-        start_time = time.time()
-        # Pre-Processing
-        pre_processing()
-        ligands = prep_ligands()
-        # Let other ranks know pre-processing is finished; they can now ask for work
-        for i in range(1,size):
-            comm.sendrecv('pre-processing finished; ask for work', dest=i)
-
-        # Until all ligands have been docked, send more work to worker ranks
-        while ligands:
-            source = comm.recv(source=MPI.ANY_SOURCE)
-            comm.send(ligands.pop(), dest=source)
-
-        # When all ligands have been sent, let worker ranks know they can stop
-        for i in range(1,size):
-            comm.send('no more ligands', dest=i)
-            comm.recv(source=i)
-
-        # Post-Processing
-        sort()
-        isolate_output()
-        reset()
-        end_time = time.time()
-        total_time = end_time - start_time
-        logging.info(f"{total_time}")
-        logging.info(f"Nodes: {os.environ['SLURM_NNODES']}")
-        logging.info(f"Library: {library_short}")
-        #subprocess.run([f"echo {total_time} > runtime.txt"], shell=True)
-        #subprocess.run([f"echo ' Nodes: {os.environ['SLURM_NNODES']}' >> runtime.txt"], shell=True)
-        #subprocess.run([f"echo ' Library: {library_short}' >> runtime.txt"], shell=True)
-
-    else: # All ranks besides rank 0
-        comm.recv(source=0) # Wait for rank 0 to finish pre-processing
-        comm.send(rank, dest=0)
-        processing()    
         
 
-
-main()
+try:
+    main()
+except:
+    logging.error('Error on main().')
+    logging.debug(Exception)
