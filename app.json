@@ -131,7 +131,7 @@
   	      {"ad4": "Autodock4"}
         ],
         "type": "enumeration",
-        "visible": true,
+        "visible": false,
         "required": true,
         "order": 1000   
       },
@@ -148,7 +148,7 @@
           {"flexible": "Flexible"}
         ],
         "type": "enumeration",
-        "visible": true, 
+        "visible": false, 
         "required": true,
         "order": 1000
       },
@@ -159,24 +159,14 @@
     {  
       "id": "library",
       "value": {
-        "default": "/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test",
+        "default": "/scratch/projects/docking/Test-set-compressed",
         "enumValues":[
-          {"/scratch/02875/docking/test/Enamine-PC/Enamine-PC/test_sets/test": "test"},
-	  {"/scratch/02875/docking/test/Enamine-AC/100_sets": "Enamine-AC"},
-          {"/scratch/02875/docking/test/Enamine-HTSC/100_sets": "Enamine-HTSC"},
-          {"/scratch/02875/docking/test/Enamine-PC-compressed/1": "Enamine-PC"},
-          {"/scratch/02875/docking/test/ZINC-in-trials-compressed/1": "ZINC-in-trials"},
-          {"/scratch/02875/docking/test/ZINC-fragments/100_sets": "ZINC-fragments"},
-	  {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/5000_set": "ZINC-in-trials 5k"},
-          {"/scratch/02875/docking/test/benchmarks/ZINC-in-trials/10000_set": "ZINC-in-trials 10k"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/5000_set": "PC 5k"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-PC/10000_set": "PC 10k"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-AC/5000_set": "AC 5k"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-AC/10000_set": "AC 10k"},
-          {"/scratch/02875/docking/test/benchmarks/ZINC-fragments/5000_set": "ZINC-fragments 5k"},
-          {"/scratch/02875/docking/test/benchmarks/ZINC-fragments/10000_set": "ZINC-fragments 10k"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-HTSC/5000_set": "HTSC 5k"},
-          {"/scratch/02875/docking/test/benchmarks/Enamine-HTSC/10000_set": "HTSC 10k"}
+          {"/scratch/projects/docking/Test-set-compressed": "Test-set"},
+          {"/scratch/projects/docking/Enamine-PC-compressed": "Enamine-PC"},
+          {"/scratch/projects/docking/Enamine-AC-compressed": "Enamine-AC"},
+          {"/scratch/projects/docking/Enamine-HTSC-compressed": "Enamine-HTSC"},
+          {"/scratch/projects/docking/ZINC-fragments-compressed": "ZINC-fragments"},
+          {"/scratch/projects/docking/ZINC-in-trials-compressed": "ZINC-in-trials"}
         ],
         "type": "enumeration",
         "visible": true,
@@ -206,7 +196,7 @@
       "value": {
         "default": "THR315",
         "type": "string",
-        "visible": true,
+        "visible": false,
         "required": false,
         "order": 1000   
       },

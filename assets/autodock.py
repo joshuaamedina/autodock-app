@@ -75,14 +75,14 @@ if DOCKING == 'rigid':
 elif DOCKING == 'flexible':
     FLEXIBLE = True
 SIDECHAINS = (args.sidechains).split('_')
-LIBRARY_SHORT = args.ligand_library.split('/')[6]
+LIBRARY_SHORT = args.ligand_library.split('/')[4]
 NUMBER_OF_OUTPUTS = args.number if args.number <= 1000 else 1000
 
 # Internal constants
 # tasks should be nodes * 128 / cpus
 TASKS = int(os.environ['SLURM_NTASKS']) # What the user chose on the web portal
 NODES = int(os.environ['SLURM_NNODES']) # What the user chose on the web portal
-if LIBRARY_SHORT in ['test', 'Enamine-PC', 'ZINC-fragments', 'ZINC-in-trials']:
+if LIBRARY_SHORT in ['Test-set-compressed', 'Enamine-PC-compressed', 'ZINC-fragments-compressed', 'ZINC-in-trials-compressed']:
     EXPECTED_NODES = 1
     EXPECTED_TASKS = 32
 elif LIBRARY_SHORT == 'Enamine-HTSC':
@@ -237,12 +237,14 @@ def prep_receptor():
     
 
 def prep_ligands():
-    # Returns a list where each item is the path to a pickled and compressed 
-    #   text file containing multiple ligand strings
+    # Returns a list where each item is the path to a pickled and compressed
+    #   text file containing multiple ligand strings, ignores files that are
+    #   not in .pkl or .dat format
     ligand_paths = []
     for dirpath, _, filenames in os.walk(args.ligand_library):
         for filename in filenames:
-            ligand_paths.append(f'{dirpath}/{filename}')
+            if filename.endswith('.pkl') or filename.endswith('.dat'):
+                ligand_paths.append(f'{dirpath}/{filename}')
     return ligand_paths
 
 
