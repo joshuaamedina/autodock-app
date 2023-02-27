@@ -82,15 +82,19 @@ NUMBER_OF_OUTPUTS = args.number if args.number <= 1000 else 1000
 # tasks should be nodes * 128 / cpus
 TASKS = int(os.environ['SLURM_NTASKS']) # What the user chose on the web portal
 NODES = int(os.environ['SLURM_NNODES']) # What the user chose on the web portal
+logging.info(f"Nodes: {NODES}.")
+logging.info(f"Tasks: {TASKS}.")
+logging.info(f"Library: {LIBRARY_SHORT}.")
+
 if LIBRARY_SHORT in ['Test-set-compressed', 'Enamine-PC-compressed', 'ZINC-fragments-compressed', 'ZINC-in-trials-compressed']:
     EXPECTED_NODES = 1
     EXPECTED_TASKS = 32
-elif LIBRARY_SHORT == 'Enamine-HTSC':
-    EXPECTED_NODES = 1
-    EXPECTED_TASKS = 32
-elif LIBRARY_SHORT == 'Enamine-AC':
-    EXPECTED_NODES = 1
-    EXPECTED_TASKS = 32
+elif LIBRARY_SHORT == 'Enamine-HTSC-compressed':
+    EXPECTED_NODES = 10
+    EXPECTED_TASKS = 320
+elif LIBRARY_SHORT == 'Enamine-AC-compressed':
+    EXPECTED_NODES = 4
+    EXPECTED_TASKS = 128
 CPUS = 4
 VERBOSITY = 0 # Prints vina docking progress to stdout if set to 1 (normal) or 2 (verbose)
 POSES = 1 # If set to 1, only saves the best pose/score to the output ligand .pdbqt file
@@ -99,9 +103,12 @@ MAX_SIDECHAINS = 6
 
 def main():
     if RANK == 0:
+        logging.info(f"Library: {LIBRARY_SHORT}.")
+        logging.info(f"Starting the time")
         start_time = time.time()
         # Pre-Processing
         pre_processing()
+        logging.info(f"Finished preprocessing")
         ligands = prep_ligands()
         # Let other ranks know pre-processing is finished; they can now ask for work
         for i in range(1,SIZE):
@@ -257,10 +264,22 @@ def run_docking(ligands, v, directory):
         os.makedirs(output_directory)
     for _, filename in enumerate(ligands):
         ligand = ligands[filename]
-        v.set_ligand_from_string(ligand)
-        v.dock(exhaustiveness=EXHAUSTIVENESS)
-        v.write_poses(f'{output_directory}/output_{filename}', \
-                      n_poses=POSES, overwrite=True)
+        try:
+            v.set_ligand_from_string(ligand)
+        except Exception as e:
+            logging.error(f"Error setting ligand {filename}; Error = {e}")
+            continue
+        try:
+            v.dock(exhaustiveness=EXHAUSTIVENESS)
+        except Exception as e:
+            logging.error(f"Error docking ligand {filename}; Error = {e}")
+            continue
+        try:
+            v.write_poses(f'{output_directory}/output_{filename}', \
+                           n_poses=POSES, overwrite=True)
+        except Exception as e:
+            logging.error(f"Error writing ligand {filename}; Error = {e}")
+            continue
         subprocess.run([f"grep -i -m 1 'REMARK VINA RESULT:' \
                         {output_directory}/output_{filename} \
                         | awk '{{print $4}}' >> results_{RANK}.txt; echo {filename} \
@@ -397,6 +416,6 @@ def reset():
 
 try:
     main()
-except:
+except Exception as e:
     logging.error('Error on main().')
-    logging.debug(Exception)
+    logging.debug(e)
